@@ -2,16 +2,16 @@ import streamlit as st
 from extractor import get_latest_ai_news
 
 # ==========================================
-# Mobile Optimized Configuration
+# Mobile Optimized Configuration (V6)
 # ==========================================
 st.set_page_config(
-    page_title="AI News Swipe", 
+    page_title="AI News Hub", 
     page_icon="📱", 
     layout="wide",
     initial_sidebar_state="collapsed"
 )
 
-# Custom CSS for TikTok/Reels style swipe UI
+# Custom CSS for Ergonomic Mobile UI
 st.markdown("""
 <style>
     /* Reset Streamlit paddings for full screen bleed */
@@ -26,112 +26,126 @@ st.markdown("""
     #MainMenu { visibility: hidden; }
     footer { visibility: hidden; }
 
-    /* Snap Scrolling Container */
+    /* Free Scrolling Container (Removed annoying snap) */
     html, body, .stApp {
-        scroll-snap-type: y mandatory;
-        overflow-y: scroll;
-        scroll-behavior: smooth;
-        background-color: #000;
+        background-color: #0d0d12;
         margin: 0;
         padding: 0;
+        color: #ffffff;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
         -webkit-overflow-scrolling: touch;
     }
 
-    /* Individual Swipe Card */
-    .swipe-card {
-        height: 100vh;
-        width: 100vw;
-        scroll-snap-align: start;
-        position: relative;
+    /* Fixed Top Tab Bar */
+    .top-tab-bar {
+        position: sticky;
+        top: 0;
+        z-index: 100;
+        background: rgba(13, 13, 18, 0.85);
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
+        border-bottom: 1px solid rgba(255,255,255,0.1);
+        padding: 12px 16px;
         display: flex;
-        flex-direction: column;
+        gap: 12px;
+        overflow-x: auto;
+        white-space: nowrap;
+        scrollbar-width: none;
+    }
+    .top-tab-bar::-webkit-scrollbar {
+        display: none;
+    }
+    
+    .tab-item {
+        color: rgba(255,255,255,0.6);
+        background: rgba(255,255,255,0.05);
+        padding: 8px 16px;
+        border-radius: 20px;
+        font-size: 0.9rem;
+        font-weight: 600;
+        text-decoration: none;
+        transition: all 0.2s;
+        border: 1px solid transparent;
+    }
+    .tab-item.active {
         color: #ffffff;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-        box-sizing: border-box;
-        overflow: hidden;
+        background: rgba(255,255,255,0.15);
+        border: 1px solid rgba(255,255,255,0.3);
     }
 
-    /* Dynamic gradients based on source (simulated dark mode) */
-    .bg-qiita { background: linear-gradient(145deg, #112211 0%, #000000 100%); }
-    .bg-zenn { background: linear-gradient(145deg, #001122 0%, #000000 100%); }
-    .bg-google { background: linear-gradient(145deg, #220505 0%, #000000 100%); }
-    .bg-hatena { background: linear-gradient(145deg, #001828 0%, #000000 100%); }
-    .bg-hacker { background: linear-gradient(145deg, #331500 0%, #000000 100%); }
-    .bg-techcrunch { background: linear-gradient(145deg, #002211 0%, #000000 100%); }
-    .bg-gizmodo { background: linear-gradient(145deg, #222222 0%, #000000 100%); }
-    .bg-default { background: linear-gradient(145deg, #1a1a2e 0%, #000000 100%); }
-
-    .content-wrapper {
-        z-index: 2;
+    /* Article Card List */
+    .feed-container {
+        padding: 16px;
         display: flex;
         flex-direction: column;
-        height: 100%;
-        padding: 60px 24px 40px 24px;
-        justify-content: space-between;
+        gap: 24px;
+        padding-bottom: 80px;
     }
+
+    .article-card {
+        background: #181820;
+        border-radius: 24px;
+        padding: 24px;
+        border: 1px solid rgba(255,255,255,0.05);
+        box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    }
+
+    /* Dynamic gradient accents */
+    .border-qiita { border-top: 4px solid #55c500; }
+    .border-zenn { border-top: 4px solid #3ea8ff; }
+    .border-google { border-top: 4px solid #ea4335; }
+    .border-hatena { border-top: 4px solid #008fde; }
+    .border-hacker { border-top: 4px solid #ff6600; }
+    .border-techcrunch { border-top: 4px solid #00a562; }
+    .border-gizmodo { border-top: 4px solid #ffffff; }
 
     /* Header info */
     .card-header {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        margin-bottom: 20px;
+        margin-bottom: 16px;
     }
 
     .source-badge {
-        background: rgba(255, 255, 255, 0.15);
-        backdrop-filter: blur(5px);
-        padding: 6px 14px;
-        border-radius: 20px;
-        font-size: 0.8rem;
+        font-size: 0.75rem;
         font-weight: 700;
-        letter-spacing: 0.05em;
+        color: rgba(255, 255, 255, 0.5);
         text-transform: uppercase;
+        letter-spacing: 0.05em;
     }
 
     .time-badge {
-        font-size: 0.8rem;
-        color: rgba(255, 255, 255, 0.6);
+        font-size: 0.75rem;
+        color: rgba(255, 255, 255, 0.4);
     }
 
-    /* Title Area */
-    .title-area {
-        margin-top: auto;
-        margin-bottom: 20px;
-    }
-
+    /* Title Area (Smaller in V6) */
     .article-title {
-        font-size: 2rem;
-        font-weight: 800;
-        line-height: 1.25;
-        color: #ffffff;
+        font-size: 1.2rem;
+        font-weight: 700;
+        line-height: 1.4;
+        color: rgba(255, 255, 255, 0.85);
         text-decoration: none;
         display: block;
-        text-shadow: 0 2px 10px rgba(0,0,0,0.5);
-        margin-bottom: 8px;
+        margin-bottom: 16px;
     }
-    
     .article-subtitle {
-        font-size: 1rem;
-        color: rgba(255, 255, 255, 0.7);
-        margin-bottom: 12px;
+        font-size: 0.85rem;
+        color: rgba(255, 255, 255, 0.4);
+        margin-bottom: 16px;
         font-style: italic;
     }
 
-    /* Summary Block */
-    .summary-glass {
-        background: rgba(255, 255, 255, 0.08);
-        backdrop-filter: blur(12px);
-        -webkit-backdrop-filter: blur(12px);
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: 16px;
-        padding: 18px;
-        font-size: 1.05rem;
-        line-height: 1.5;
-        color: rgba(255, 255, 255, 0.95);
-        max-height: 40vh;
-        overflow-y: auto;
-        margin-bottom: 20px;
+    /* Summary Block (Larger and More Readable in V6) */
+    .summary-text {
+        font-size: 1.15rem;
+        line-height: 1.7;
+        color: #ffffff;
+        font-weight: 400;
+        margin-bottom: 24px;
+        padding-left: 12px;
+        border-left: 2px solid rgba(255,255,255,0.1);
     }
 
     .ai-label {
@@ -148,37 +162,19 @@ st.markdown("""
 
     /* Bottom Action */
     .read-btn {
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        background: #ffffff;
-        color: #000000;
+        display: block;
+        text-align: center;
+        background: rgba(255,255,255,0.08);
+        color: #ffffff;
         text-decoration: none;
-        padding: 16px;
-        border-radius: 30px;
-        font-weight: 700;
-        font-size: 1.1rem;
-        margin-bottom: 15px;
-        transition: transform 0.2s;
+        padding: 14px;
+        border-radius: 14px;
+        font-weight: 600;
+        font-size: 0.95rem;
+        transition: background 0.2s;
     }
     .read-btn:active {
-        transform: scale(0.96);
-    }
-
-    .swipe-instruction {
-        text-align: center;
-        font-size: 0.75rem;
-        color: rgba(255,255,255,0.4);
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 4px;
-        animation: subtle-bounce 2s infinite ease-in-out;
-    }
-
-    @keyframes subtle-bounce {
-        0%, 100% { transform: translateY(0); }
-        50% { transform: translateY(-6px); }
+        background: rgba(255,255,255,0.15);
     }
     
     /* Loading View */
@@ -188,7 +184,7 @@ st.markdown("""
         flex-direction: column;
         justify-content: center;
         align-items: center;
-        background: #000;
+        background: #0d0d12;
         color: white;
     }
     
@@ -228,25 +224,74 @@ if not st.session_state.articles:
     st.rerun()
 
 # ==========================================
-# Render Swipe Cards
+# Top Navigation & Filtering
 # ==========================================
 
-html_cards = []
+# Using query params for simple tab state without rerun loops
+query_params = st.query_params
+current_tab = query_params.get("tab", "all")
 
-for idx, article in enumerate(st.session_state.articles):
+col1, col2, col3 = st.columns(3)
+
+# Define categories
+cats = {
+    "all": "すべてのニュース",
+    "ai": "AI・トレンド",
+    "gadget": "ガジェット",
+}
+
+# Create top sticky tab bar HTML
+tab_html = '<div class="top-tab-bar">'
+for key, label in cats.items():
+    active_class = "active" if current_tab == key else ""
+    # Instead of actual links which trigger full reloads in streamlit, we use streamlit buttons styled as tabs
+    # Since we can't easily style st.button to look exactly like a horizontal scorllable tab bar,
+    # we'll build a custom HTML navigation that uses Streamlit's routing via URL parameters or we just use native columns.
+    pass
+
+# Workaround for Streamlit Tabs: Use standard pill buttons at the top
+st.markdown('<div style="padding: 16px 16px 0 16px;">', unsafe_allow_html=True)
+selected_tab = st.radio(
+    "トピックフィルター",
+    ["すべてのニュース", "AI・トレンド", "ガジェット"],
+    horizontal=True,
+    label_visibility="collapsed"
+)
+st.markdown('</div>', unsafe_allow_html=True)
+
+# Filter logic
+filtered_articles = []
+for a in st.session_state.articles:
+    src = a["source"]
+    is_gadget = any(g in src for g in ["Gizmodo", "Engadget", "WIRED", "GIGAZINE", "ITmedia", "ASCII", "PC Watch"])
+    
+    if selected_tab == "ガジェット" and is_gadget:
+        filtered_articles.append(a)
+    elif selected_tab == "AI・トレンド" and not is_gadget:
+        filtered_articles.append(a)
+    elif selected_tab == "すべてのニュース":
+        filtered_articles.append(a)
+
+
+# ==========================================
+# Render Ergonomic Cards
+# ==========================================
+
+html_cards = ['<div class="feed-container">']
+
+for article in filtered_articles:
     src = article["source"]
     
-    # Determine background class
-    bg_class = "bg-default"
-    if "Qiita" in src: bg_class = "bg-qiita"
-    elif "Zenn" in src: bg_class = "bg-zenn"
-    elif "Google" in src: bg_class = "bg-google"
-    elif "Hatena" in src: bg_class = "bg-hatena"
-    elif "Hacker News" in src: bg_class = "bg-hacker"
-    elif "TechCrunch" in src: bg_class = "bg-techcrunch"
-    elif "Gizmodo" in src or "Engadget" in src or "WIRED" in src: bg_class = "bg-gizmodo"
+    # Determine border accent
+    border_class = "border-gizmodo"
+    if "Qiita" in src: border_class = "border-qiita"
+    elif "Zenn" in src: border_class = "border-zenn"
+    elif "Google" in src: border_class = "border-google"
+    elif "Hatena" in src: border_class = "border-hatena"
+    elif "Hacker News" in src: border_class = "border-hacker"
+    elif "TechCrunch" in src: border_class = "border-techcrunch"
 
-    card_html = f'<div class="swipe-card {bg_class}"><div class="content-wrapper">'
+    card_html = f'<div class="article-card {border_class}">'
     
     # Header: Source & Time
     card_html += f"""
@@ -256,17 +301,15 @@ for idx, article in enumerate(st.session_state.articles):
 </div>
 """
     
-    # Title & Subtitle (Original English)
-    card_html += '<div class="title-area">'
+    # Title & Subtitle (Original English) - Smaller in V6
     if article.get("is_foreign", False) and "title_ja" in article:
         card_html += f'<a href="{article["link"]}" target="_blank" class="article-title">{article["title_ja"]}</a>'
         card_html += f'<div class="article-subtitle">{article["title"]}</div>'
     else:
         card_html += f'<a href="{article["link"]}" target="_blank" class="article-title">{article["title"]}</a>'
-    card_html += '</div>'
     
-    # Summary Box
-    card_html += '<div class="summary-glass">'
+    # Summary Box - Larger in V6
+    card_html += '<div class="summary-text">'
     if article.get("is_foreign", False) and "summary_ja" in article:
         card_html += """
 <div class="ai-label">
@@ -276,30 +319,22 @@ AI 翻訳要約
 """
         card_html += article["summary_ja"]
     else:
-        # For domestic sites, show the first 150 chars of description clearly
         desc = article["description"]
-        if len(desc) > 150: desc = desc[:147] + "..."
+        if len(desc) > 180: desc = desc[:177] + "..."
         card_html += desc
     card_html += '</div>'
     
     # Bottom buttons
     card_html += f"""
 <a href="{article["link"]}" target="_blank" class="read-btn">
-記事をブラウザで開く
+元の記事を読む
 </a>
-"""
-    
-    # Swipe Hint (Show on all but very last card)
-    if idx < len(st.session_state.articles) - 1:
-        card_html += """
-<div class="swipe-instruction">
-<span>上にスワイプして次のニュース</span>
-<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
 </div>
 """
-        
-    card_html += '</div></div>'
+    
     html_cards.append(card_html)
 
-# Inject all cards into Streamlit at once
+html_cards.append('</div>')
+
+# Output
 st.markdown("".join(html_cards), unsafe_allow_html=True)

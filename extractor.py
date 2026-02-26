@@ -99,13 +99,17 @@ def get_latest_ai_news():
         {"url": "https://techcrunch.com/category/artificial-intelligence/feed/", "name": "TechCrunch"},
         # 新しいガジェット系ニュースサイトを追加
         {"url": "https://www.gizmodo.jp/index.xml", "name": "Gizmodo Japan"},
-        {"url": "https://japanese.engadget.com/rss.xml", "name": "Engadget (Archive)"},
-        {"url": "https://wired.jp/rss/index.xml", "name": "WIRED Japan"}
+        {"url": "https://japanese.engadget.com/rss.xml", "name": "Engadget"},
+        {"url": "https://wired.jp/rss/index.xml", "name": "WIRED Japan"},
+        {"url": "https://gigazine.net/news/rss_2.0/", "name": "GIGAZINE"},
+        {"url": "https://rss.itmedia.co.jp/rss/2.0/news_bursts.xml", "name": "ITmedia"},
+        {"url": "https://ascii.jp/mac/rss.xml", "name": "ASCII.jp"},
+        {"url": "https://pc.watch.impress.co.jp/data/rss/1.0/pcw/feed.rdf", "name": "PC Watch"}
     ]
     
     all_articles = []
     # 複数フィードの取得も並列化して速度を上げる
-    with ThreadPoolExecutor(max_workers=5) as executor:
+    with ThreadPoolExecutor(max_workers=8) as executor:
         future_to_feed = {executor.submit(fetch_rss_feed, feed["url"], feed["name"]): feed for feed in feeds}
         for future in as_completed(future_to_feed):
             all_articles.extend(future.result())
@@ -114,17 +118,17 @@ def get_latest_ai_news():
     
     seen_links = set()
     unique_articles = []
-    # 記事が多すぎると要約が遅くなるため、スマホ版は最新60件に絞る
+    # 今回は情報量アップのため、最大100件まで取得上限を引き上げる
     for article in all_articles:
         if article["link"] not in seen_links:
             seen_links.add(article["link"])
             unique_articles.append(article)
             
-    unique_articles = unique_articles[:60]
+    unique_articles = unique_articles[:100]
             
     # Process foreign articles automatically in parallel (Translation + Summary)
     foreign_articles = [a for a in unique_articles if a.get("is_foreign")]
-    with ThreadPoolExecutor(max_workers=5) as executor:
+    with ThreadPoolExecutor(max_workers=8) as executor:
         futures = [executor.submit(process_foreign_article, a) for a in foreign_articles]
         for f in as_completed(futures):
             pass
