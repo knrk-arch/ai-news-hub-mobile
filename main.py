@@ -291,41 +291,43 @@ for article in filtered_articles:
     elif "Hacker News" in src: border_class = "border-hacker"
     elif "TechCrunch" in src: border_class = "border-techcrunch"
 
-    card_html = f'<div class="article-card {border_class}">'
-    
-    # Header: Source & Time
-    card_html += f"""
-<div class="card-header">
-<div class="source-badge">{src}</div>
-<div class="time-badge">{article["published_at"]}</div>
-</div>
-"""
-    
-    # Title & Subtitle (Original English) - Smaller in V6
+    # Title & Subtitle (Original English)
+    title_html = ""
     if article.get("is_foreign", False) and "title_ja" in article:
-        card_html += f'<a href="{article["link"]}" target="_blank" class="article-title">{article["title_ja"]}</a>'
-        card_html += f'<div class="article-subtitle">{article["title"]}</div>'
+        title_html = f'<a href="{article["link"]}" target="_blank" class="article-title">{article["title_ja"]}</a>'
+        title_html += f'<div class="article-subtitle">{article["title"]}</div>'
     else:
-        card_html += f'<a href="{article["link"]}" target="_blank" class="article-title">{article["title"]}</a>'
-    
-    # Summary Box - Larger in V6
-    card_html += '<div class="summary-text">'
+        title_html = f'<a href="{article["link"]}" target="_blank" class="article-title">{article["title"]}</a>'
+
+    # Summary Box
+    summary_html = ""
     if article.get("is_foreign", False) and "summary_ja" in article:
-        card_html += """
+        summary_html = f"""
 <div class="ai-label">
 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
 AI 翻訳要約
 </div>
+{article["summary_ja"]}
 """
-        card_html += article["summary_ja"]
     else:
         desc = article["description"]
         if len(desc) > 180: desc = desc[:177] + "..."
-        card_html += desc
-    card_html += '</div>'
-    
-    # Bottom buttons
-    card_html += f"""
+        summary_html = desc
+
+    # Construct the entire card safely without indentation
+    card_html = f"""
+<div class="article-card {border_class}">
+<div class="card-header">
+<div class="source-badge">{src}</div>
+<div class="time-badge">{article["published_at"]}</div>
+</div>
+
+{title_html}
+
+<div class="summary-text">
+{summary_html}
+</div>
+
 <a href="{article["link"]}" target="_blank" class="read-btn">
 元の記事を読む
 </a>

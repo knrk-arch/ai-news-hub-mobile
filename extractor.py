@@ -8,6 +8,7 @@ from sumy.summarizers.lsa import LsaSummarizer
 from deep_translator import GoogleTranslator
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import nltk
+from bs4 import BeautifulSoup
 
 # Streamlit Cloudなどの環境で初回実行時にNLTKの必要な辞書をダウンロードする
 try:
@@ -39,6 +40,11 @@ def fetch_rss_feed(url, source_name):
             pub_date = parse_date(published)
             
             summary = entry.get('summary', '')
+            try:
+                summary = BeautifulSoup(summary, "html.parser").get_text(separator=' ', strip=True)
+            except Exception:
+                pass
+                
             if len(summary) > 200:
                 summary = summary[:200] + '...'
                 
