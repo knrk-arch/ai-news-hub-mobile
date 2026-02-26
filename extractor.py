@@ -7,6 +7,14 @@ from sumy.nlp.tokenizers import Tokenizer
 from sumy.summarizers.lsa import LsaSummarizer
 from deep_translator import GoogleTranslator
 from concurrent.futures import ThreadPoolExecutor, as_completed
+import nltk
+
+# Streamlit Cloudなどの環境で初回実行時にNLTKの必要な辞書をダウンロードする
+try:
+    nltk.data.find('tokenizers/punkt_tab')
+except LookupError:
+    nltk.download('punkt', quiet=True)
+    nltk.download('punkt_tab', quiet=True)
 
 def parse_date(date_string):
     try:
