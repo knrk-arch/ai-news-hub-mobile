@@ -9,6 +9,8 @@ from deep_translator import GoogleTranslator
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import nltk
 from bs4 import BeautifulSoup
+from dateutil import parser as dateutil_parser
+import pytz
 
 # Streamlit Cloudなどの環境で初回実行時にNLTKの必要な辞書をダウンロードする
 try:
@@ -18,12 +20,27 @@ except LookupError:
     nltk.download('punkt_tab', quiet=True)
 
 def parse_date(date_string):
+    if not date_string:
+        return datetime.now()
+        
     try:
+        # First try feedparser's internal mechanism
         parsed = feedparser._parse_date(date_string)
         if parsed:
             return datetime.fromtimestamp(time.mktime(parsed))
     except Exception:
         pass
+        
+    try:
+        # Fallback to python-dateutil which is much more robust for edge-cases
+        dt = dateutil_parser.parse(date_string)
+        # Ensure it's tz-naive locally to prevent mixups later when sorting
+        if dt.tzinfo:
+            dt = dt.astimezone(pytz.utc).replace(tzinfo=None)
+        return dt
+    except Exception:
+        pass
+        
     return datetime.now()
 
 def fetch_rss_feed(url, source_name):
@@ -35,7 +52,13 @@ def fetch_rss_feed(url, source_name):
         for entry in feed.entries[:limit]:
             title = entry.get('title', 'No Title')
             link = entry.get('link', '')
-            published = entry.get('published', entry.get('updated', ''))
+            
+            # Extract date robustly from various possible RSS/Atom fields
+            published = entry.get('published', 
+                          entry.get('pubDate', 
+                          entry.get('updated', 
+                          entry.get('dc:date', 
+                          entry.get('date', '')))))
             
             pub_date = parse_date(published)
             
@@ -72,16 +95,49 @@ def summarize_and_translate(url, sentences_count=3):
             return "※URLから本文を取得できませんでした。"
         
         text = trafilatura.extract(downloaded)
-        if not text or len(text) < 100:
+        if not text:
             return "※本文が短すぎる、または構造の問題により文章を抽出できませんでした。"
 
-        is_english = len([char for char in text[:500] if ord(char) < 128]) / min(500, len(text)) > 0.8
+        # --- IDEA C: Text Cleaning ---
+        noise_words = ['cookie', 'subscribe', 'log in', 'sign in', 'sign up', 'newsletter', 'read more', 'javascript', 'please enable']
+        cleaned_lines = []
+        for line in text.split('\n'):
+            line_strip = line.strip()
+            # Remove very short lines (often UI text) and lines with explicitly noisy words
+            if len(line_strip) <= 15:
+                continue
+            lower_line = line_strip.lower()
+            if any(noise in lower_line for noise in noise_words):
+                continue
+            cleaned_lines.append(line_strip)
+            
+        cleaned_text = '\n'.join(cleaned_lines)
+        if len(cleaned_text) < 100:
+            return "※本文が短すぎる、または構造の問題により文章を抽出できませんでした。"
+
+        is_english = len([char for char in cleaned_text[:500] if ord(char) < 128]) / min(500, len(cleaned_text)) > 0.8
         lang = "english" if is_english else "japanese"
         
-        parser = PlaintextParser.from_string(text, Tokenizer(lang))
+        parser = PlaintextParser.from_string(cleaned_text, Tokenizer(lang))
+        
+        # --- IDEA D: Hybrid Lead-1 + LSA Summarization ---
+        sentences = list(parser.document.sentences)
+        if not sentences:
+            return "※本文から意味のある文章を抽出できませんでした。"
+            
+        first_sentence = str(sentences[0])
+        
         summarizer = LsaSummarizer()
-        summary_sentences = summarizer(parser.document, sentences_count)
-        summary_text = " ".join([str(sentence) for sentence in summary_sentences])
+        # Fetch candidates from LSA
+        candidate_sentences = [str(s) for s in summarizer(parser.document, sentences_count)]
+        
+        # Always include the Lead (first) sentence, then fill the rest with LSA
+        final_sentences = [first_sentence]
+        for s in candidate_sentences:
+            if s != first_sentence and len(final_sentences) < sentences_count:
+                final_sentences.append(s)
+                
+        summary_text = " ".join(final_sentences)
         
         if is_english:
             translator = GoogleTranslator(source='auto', target='ja')
