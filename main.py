@@ -1,7 +1,7 @@
 import streamlit as st
 import json
 import hashlib
-from extractor import get_latest_ai_news
+import os
 import streamlit.components.v1 as components
 
 # ==========================================
@@ -15,21 +15,40 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# Fetch Data
 if 'articles' not in st.session_state:
     st.session_state.articles = []
     
-if not st.session_state.articles:
+# ZERO-LOAD: Instantly load from pre-compiled JSON instead of web scraping
+# Hybrid Cloud Approach: Generate it if it doesn't exist yet (e.g., Streamlit Cloud Boot)
+json_path = os.path.join("data", "daily_curation.json")
+
+if not os.path.exists(json_path):
     st.markdown("""
         <div style="height: 100vh; display: flex; flex-direction: column; justify-content: center; align-items: center; background: #0d1117; color: white; font-family: sans-serif; position: fixed; top: 0; left: 0; width: 100vw; z-index: 999;">
-            <div style="width: 44px; height: 44px; border: 4px solid rgba(255,255,255,0.05); border-left-color: #58a6ff; border-radius: 50%; animation: spin 1s cubic-bezier(0.5, 0, 0.5, 1) infinite; margin-bottom: 20px;"></div>
+            <div style="width: 48px; height: 48px; border: 4px solid rgba(255,255,255,0.05); border-left-color: #58a6ff; border-radius: 50%; animation: spin 1s cubic-bezier(0.5, 0, 0.5, 1) infinite; margin-bottom: 24px;"></div>
             <style>@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }</style>
-            <h3 style="font-weight:600; margin-bottom: 8px;">最新ニュースを同期中...</h3>
-            <p style="color: #8b949e; font-size: 0.85rem;">最大100件のAI＆ガジェット情報を取得・翻訳しています</p>
+            <h3 style="font-weight:600; margin-bottom: 12px; font-size: 1.3rem;">Initializing Curation Engine...</h3>
+            <p style="color: #8b949e; font-size: 0.95rem; margin-bottom: 24px; text-align: center; max-width: 80%;">クラウドサーバーの初期化、または本日初のアクセスです。<br>最新のグローバルニュースをAIが厳選・翻訳しています（初回のみ約1〜2分かかります）</p>
         </div>
     """, unsafe_allow_html=True)
-    st.session_state.articles = get_latest_ai_news()
-    st.rerun()
+    
+    # Run the heavy generation live just this once
+    try:
+        from generate_curation import run_curation
+        run_curation()
+        # After success, we force a rerun so it loads perfectly via the standard JSON path
+        st.rerun()
+    except Exception as e:
+        st.error(f"Failed to generate curation: {e}")
+        st.stop()
+
+# Load the JSON normally (0.1s Zero-Load state)
+try:
+    with open(json_path, 'r', encoding='utf-8') as f:
+        st.session_state.articles = json.load(f)
+except Exception as e:
+    st.error(f"データの読み込みに失敗しました: {e}")
+    st.stop()
 
 # ---------------------------------------------------------
 # UI Overhaul Hack:
@@ -63,11 +82,6 @@ st.markdown("""
     }
 </style>
 """, unsafe_allow_html=True)
-
-# Ensure every article has a consistent, collision-free unique ID
-for a in st.session_state.articles:
-    if 'uid' not in a:
-        a['uid'] = hashlib.md5(a['link'].encode('utf-8')).hexdigest()
 
 # Serialize data for JS injection
 # Need to replace some html characters to safely put in script tag
@@ -148,11 +162,14 @@ html_template = f"""
             </div>
         </div>
         
-        <!-- Bottom row: Horizontal Scrollable Tabs -->
+        <!-- Bottom row: Horizontal Scrollable Tabs matching the 5 strict categories -->
         <nav class="flex space-x-2 overflow-x-auto no-scrollbar pb-1" id="tabContainer">
             <button onclick="changeTab('all')" class="tab-btn px-4 py-1.5 rounded-full text-[0.85rem] font-medium whitespace-nowrap bg-blue-500/20 text-blue-400 border border-blue-500/30 transition-colors" data-tab="all">すべて</button>
-            <button onclick="changeTab('ai')" class="tab-btn px-4 py-1.5 rounded-full text-[0.85rem] font-medium whitespace-nowrap bg-white/5 text-gray-400 border border-transparent transition-colors shadow-sm" data-tab="ai">AI・トレンド</button>
-            <button onclick="changeTab('gadget')" class="tab-btn px-4 py-1.5 rounded-full text-[0.85rem] font-medium whitespace-nowrap bg-white/5 text-gray-400 border border-transparent transition-colors shadow-sm" data-tab="gadget">ガジェット</button>
+            <button onclick="changeTab('AI・テクノロジートレンド')" class="tab-btn px-4 py-1.5 rounded-full text-[0.85rem] font-medium whitespace-nowrap bg-white/5 text-gray-400 border border-transparent transition-colors shadow-sm" data-tab="AI・テクノロジートレンド">AI・トレンド</button>
+            <button onclick="changeTab('ガジェット・ハードウェア')" class="tab-btn px-4 py-1.5 rounded-full text-[0.85rem] font-medium whitespace-nowrap bg-white/5 text-gray-400 border border-transparent transition-colors shadow-sm" data-tab="ガジェット・ハードウェア">ガジェット</button>
+            <button onclick="changeTab('ビジネス・経済')" class="tab-btn px-4 py-1.5 rounded-full text-[0.85rem] font-medium whitespace-nowrap bg-white/5 text-gray-400 border border-transparent transition-colors shadow-sm" data-tab="ビジネス・経済">ビジネス・経済</button>
+            <button onclick="changeTab('ライフハック・仕事術')" class="tab-btn px-4 py-1.5 rounded-full text-[0.85rem] font-medium whitespace-nowrap bg-white/5 text-gray-400 border border-transparent transition-colors shadow-sm" data-tab="ライフハック・仕事術">ライフハック</button>
+            <button onclick="changeTab('サイエンス・未来予測')" class="tab-btn px-4 py-1.5 rounded-full text-[0.85rem] font-medium whitespace-nowrap bg-white/5 text-gray-400 border border-transparent transition-colors shadow-sm" data-tab="サイエンス・未来予測">サイエンス</button>
             <button onclick="changeTab('saved')" class="tab-btn px-4 py-1.5 rounded-full text-[0.85rem] font-medium whitespace-nowrap bg-white/5 text-gray-400 border border-transparent transition-colors shadow-sm flex items-center gap-1.5" data-tab="saved">
                 <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path d="M5 4a2 2 0 012-2h6a2 2 0 012 2v14l-5-2.5L5 18V4z"></path></svg>
                 保存済み
@@ -176,10 +193,7 @@ html_template = f"""
 
     <script>
         // Load data from python backend
-        const rawArticles = {articles_json};
-        
-        // Use robust unique ID generated by Python backend
-        const articles = rawArticles.map((a) => ({{ ...a, id: a.uid }}));
+        const articles = {articles_json};
         
         // Load bookmarks from local storage
         let savedIds = JSON.parse(localStorage.getItem('mySavedNewsIds')) || [];
@@ -289,16 +303,13 @@ html_template = f"""
         function renderFeed() {{
             // Apply all filters completely clientside for instant UX
             let filtered = articles.filter(a => {{
-                // Search check
-                const matchString = `${{a.title}} ${{a.title_ja}} ${{a.source}} ${{a.description}}`.toLowerCase();
+                // Search check (using the simplified data structure)
+                const matchString = `${{a.title_ja}} ${{a.source}} ${{a.core_sentence}} ${{a.tags.join(' ')}}`.toLowerCase();
                 if (searchQuery && !matchString.includes(searchQuery)) return false;
                 
                 // Tab Context check
                 if (currentTab === 'saved') return savedIds.includes(a.id);
-                
-                const gadget = isGadget(a.source);
-                if (currentTab === 'gadget') return gadget;
-                if (currentTab === 'ai') return !gadget;
+                if (currentTab !== 'all') return a.category === currentTab;
                 
                 return true; // 'all'
             }});
@@ -317,37 +328,20 @@ html_template = f"""
             
             statsBanner.innerHTML = currentTab === 'saved' 
                 ? `保存済みの記事: <span class="text-white">${{filtered.length}}件</span>`
-                : `表示中: <span class="text-white">${{filtered.length}}件</span> (全体${{articles.length}}件中)`;
+                : `<span class="text-white">${{filtered.length}}件</span> の厳選トップニュース`;
             
             // Build the DOM string efficiently
             const html = filtered.map(a => {{
                 const isSaved = savedIds.includes(a.id);
-                const accentColor = getAccentColor(a.source);
+                const accentColor = getAccentColor(a.category);
                 
-                let titleHtml = '';
-                if (a.is_foreign && a.title_ja) {{
-                    titleHtml = `
-                        <h2 class="text-[1.05rem] font-bold text-[#e6edf3] mb-1 leading-snug tracking-tight">${{a.title_ja}}</h2>
-                        <h3 class="text-[0.75rem] text-gray-500 italic mb-2.5 line-clamp-2">${{a.title}}</h3>
-                    `;
-                }} else {{
-                    titleHtml = `<h2 class="text-[1.05rem] font-bold text-[#e6edf3] mb-2 leading-snug tracking-tight">${{a.title}}</h2>`;
-                }}
+                // Beautiful Pill Tags
+                const tagsHtml = (a.tags || []).map(t => 
+                    `<span class="inline-flex items-center px-2 py-0.5 rounded text-[0.65rem] font-medium bg-[#58a6ff]/10 text-blue-400 border border-blue-500/20 mr-1.5 mb-2">${{t}}</span>`
+                ).join('');
                 
-                let summaryHtml = '';
-                if (a.is_foreign && a.summary_ja) {{
-                    summaryHtml = `
-                        <div class="flex items-center gap-1.5 text-[#58a6ff] text-[0.65rem] font-bold uppercase tracking-wider mb-1.5">
-                            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
-                            AI 翻訳・要約
-                        </div>
-                        <p class="text-[0.9rem] text-gray-300 leading-relaxed line-clamp-3">${{a.summary_ja}}</p>
-                    `;
-                }} else {{
-                    summaryHtml = `<p class="text-[0.9rem] text-gray-300 leading-relaxed line-clamp-3">${{a.description || ''}}</p>`;
-                }}
-                
-                const readTime = Math.max(1, Math.ceil(((a.description || a.summary_ja || '').length) / 400));
+                // Core 1-Sentence Summary format
+                const summaryHtml = `<p class="text-[0.95rem] font-medium text-gray-300 leading-relaxed mt-3 mb-1 pl-3 border-l-2 border-[#58a6ff]/70">${{a.core_sentence || ''}}</p>`;
                 
                 return `
                     <div class="relative bg-[#161b22] border border-gray-700/60 rounded-2xl overflow-hidden card-anim shadow-sm">
@@ -358,7 +352,6 @@ html_template = f"""
                             <div class="flex justify-between items-center mb-2.5">
                                 <div class="flex items-center gap-2">
                                     <span class="text-[0.65rem] font-bold text-gray-400 bg-white/5 border border-white/5 py-0.5 px-2 rounded uppercase tracking-wider">${{a.source}}</span>
-                                    <span class="text-[0.7rem] text-gray-500">${{a.published_at.substring(5, 16)}}</span>
                                 </div>
                                 <button data-id="${{a.id}}" onclick="toggleBookmark('${{a.id}}', event)" class="p-2 -mr-2 -mt-2 rounded-full hover:bg-white/10 transition z-10 active:scale-90">
                                     ${{isSaved 
@@ -368,23 +361,25 @@ html_template = f"""
                                 </button>
                             </div>
                             
-                            <a href="${{a.link}}" target="_blank" class="block outline-none tap-highlight-transparent group hover:opacity-90 transition">
-                                <!-- Content -->
-                                ${{titleHtml}}
-                                
-                                <div class="bg-[#1c2128]/50 border-l-2 border-[#58a6ff]/30 p-3 rounded-r-xl my-3">
-                                    ${{summaryHtml}}
+                            <a href="${{a.url}}" target="_blank" class="block outline-none tap-highlight-transparent group hover:opacity-90 transition mt-3">
+                                <!-- Title and Tags -->
+                                <h2 class="text-[1.15rem] font-bold text-[#e6edf3] mb-2.5 leading-snug tracking-tight group-hover:text-blue-400 transition-colors">${{a.title_ja}}</h2>
+                                <div class="flex flex-wrap mb-2">
+                                    ${{tagsHtml}}
                                 </div>
+                                
+                                <!-- Core 1-sentence summary -->
+                                ${{summaryHtml}}
                             </a>
                         </div>
                         
                         <!-- Actions -->
-                        <div class="px-4 py-3 bg-[#11151c] flex justify-between items-center border-t border-gray-800/80">
+                        <div class="px-4 py-3 bg-[#11151c] flex justify-between items-center border-t border-gray-800/80 mt-4">
                             <span class="text-[0.7rem] text-gray-500 font-medium flex items-center gap-1.5">
                                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                                読むのに約${{readTime}}分
+                                読むのに約${{a.read_time_min || 1}}分
                             </span>
-                            <a href="${{a.link}}" target="_blank" class="text-blue-400 text-[0.75rem] font-bold tracking-wide flex items-center gap-1.5 bg-[#58a6ff]/10 border border-[#58a6ff]/20 px-3.5 py-1.5 rounded-full hover:bg-[#58a6ff]/20 active:scale-95 transition">
+                            <a href="${{a.url}}" target="_blank" class="text-blue-400 text-[0.75rem] font-bold tracking-wide flex items-center gap-1.5 bg-[#58a6ff]/10 border border-[#58a6ff]/20 px-3.5 py-1.5 rounded-full hover:bg-[#58a6ff]/20 active:scale-95 transition">
                                 記事を読む
                                 <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
                             </a>
