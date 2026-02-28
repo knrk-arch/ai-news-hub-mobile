@@ -245,7 +245,48 @@ html_template = f"""
             renderFeed();
         }}
         
-        // 4. Bookmark feature
+        // 4. Swipe Gesture for Tab Navigation
+        let touchStartX = 0;
+        let touchStartY = 0;
+        const tabOrder = ['all', 'AI・テクノロジートレンド', 'ガジェット・ハードウェア', 'ビジネス・経済', 'ライフハック・仕事術', 'サイエンス・未来予測', 'saved'];
+
+        scrollArea.addEventListener('touchstart', e => {{
+            touchStartX = e.changedTouches[0].screenX;
+            touchStartY = e.changedTouches[0].screenY;
+        }}, {{passive: true}});
+
+        scrollArea.addEventListener('touchend', e => {{
+            const touchEndX = e.changedTouches[0].screenX;
+            const touchEndY = e.changedTouches[0].screenY;
+            const xDiff = touchStartX - touchEndX;
+            const yDiff = Math.abs(touchStartY - touchEndY);
+            
+            // Swipe must be primarily horizontal and exceed 60px distance
+            if (Math.abs(xDiff) > 60 && Math.abs(xDiff) > yDiff * 1.5) {{
+                const currentIndex = tabOrder.indexOf(currentTab);
+                if (currentIndex === -1) return;
+                
+                let nextIndex = currentIndex;
+                if (xDiff > 0 && currentIndex < tabOrder.length - 1) {{
+                    // Swiped Left -> Move to next tab
+                    nextIndex++;
+                }} else if (xDiff < 0 && currentIndex > 0) {{
+                    // Swiped Right -> Move to previous tab
+                    nextIndex--;
+                }}
+                
+                if (nextIndex !== currentIndex) {{
+                    changeTab(tabOrder[nextIndex]);
+                    // Auto-scroll the top tab container to keep the active tab visible
+                    const targetBtn = document.querySelector(`[data-tab="${{tabOrder[nextIndex]}}"]`);
+                    if (targetBtn) {{
+                        targetBtn.scrollIntoView({{ behavior: 'smooth', block: 'nearest', inline: 'center' }});
+                    }}
+                }}
+            }}
+        }}, {{passive: true}});
+        
+        // 5. Bookmark feature
         function toggleBookmark(id, event) {{
             // prevent navigating to link when tapping save button
             event.preventDefault();
