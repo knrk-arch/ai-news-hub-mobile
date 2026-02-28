@@ -2,6 +2,7 @@ import streamlit as st
 import json
 import hashlib
 import os
+import time
 import streamlit.components.v1 as components
 
 # ==========================================
@@ -15,20 +16,33 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
+# Listen for manual refresh triggers from the frontend
+FORCE_REFRESH = st.query_params.get("refresh") == "true"
+if FORCE_REFRESH:
+    st.query_params.clear()
+
 if 'articles' not in st.session_state:
     st.session_state.articles = []
     
 # ZERO-LOAD: Instantly load from pre-compiled JSON instead of web scraping
-# Hybrid Cloud Approach: Generate it if it doesn't exist yet (e.g., Streamlit Cloud Boot)
+# Hybrid Cloud Approach: Generate it if it doesn't exist or is older than 6 hours
 json_path = os.path.join("data", "daily_curation.json")
 
-if not os.path.exists(json_path):
-    st.markdown("""
+is_expired = False
+if os.path.exists(json_path):
+    # 6 hours TTL = 21600 seconds
+    file_age = time.time() - os.path.getmtime(json_path)
+    if file_age > 21600:
+        is_expired = True
+
+if not os.path.exists(json_path) or is_expired or FORCE_REFRESH:
+    loading_msg = "最新のグローバルニュースをAIが厳選・翻訳しています..."
+    st.markdown(f"""
         <div style="height: 100vh; display: flex; flex-direction: column; justify-content: center; align-items: center; background: #0d1117; color: white; font-family: sans-serif; position: fixed; top: 0; left: 0; width: 100vw; z-index: 999;">
             <div style="width: 48px; height: 48px; border: 4px solid rgba(255,255,255,0.05); border-left-color: #58a6ff; border-radius: 50%; animation: spin 1s cubic-bezier(0.5, 0, 0.5, 1) infinite; margin-bottom: 24px;"></div>
-            <style>@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }</style>
-            <h3 style="font-weight:600; margin-bottom: 12px; font-size: 1.3rem;">Initializing Curation Engine...</h3>
-            <p style="color: #8b949e; font-size: 0.95rem; margin-bottom: 24px; text-align: center; max-width: 80%;">クラウドサーバーの初期化、または本日初のアクセスです。<br>最新のグローバルニュースをAIが厳選・翻訳しています（初回のみ約1〜2分かかります）</p>
+            <style>@keyframes spin {{ 0% {{ transform: rotate(0deg); }} 100% {{ transform: rotate(360deg); }} }}</style>
+            <h3 style="font-weight:600; margin-bottom: 12px; font-size: 1.3rem;">Curating the Web...</h3>
+            <p style="color: #8b949e; font-size: 0.95rem; margin-bottom: 24px; text-align: center; max-width: 80%;">{loading_msg}<br><span style="font-size: 0.8rem; opacity: 0.7;">（約1〜2分かかります）</span></p>
         </div>
     """, unsafe_allow_html=True)
     
@@ -150,7 +164,13 @@ html_template = f"""
     <header class="glass-header sticky top-0 z-50 px-4 py-3 flex flex-col gap-3 shadow-md">
         <!-- Top row: Title and Search -->
         <div class="flex items-center justify-between gap-3 pt-1">
-            <h1 class="text-xl font-bold text-white whitespace-nowrap tracking-tight">AINews Hub</h1>
+            <div class="flex items-center gap-2">
+                <h1 class="text-xl font-bold text-white whitespace-nowrap tracking-tight">AINews Hub</h1>
+                <!-- Manual Update Button via Query Param -->
+                <button onclick="window.location.search = '?refresh=true';" class="p-1.5 rounded-full bg-white/5 hover:bg-white/15 active:scale-90 text-gray-400 hover:text-white transition-all border border-gray-700/50" title="手動で最新ニュースを取得">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                </button>
+            </div>
             <div class="relative w-full max-w-[220px]">
                 <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                     <svg class="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
