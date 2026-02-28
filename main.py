@@ -16,6 +16,19 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
+import threading
+
+flag_path = os.path.join("data", "is_updating.flag")
+
+# Clean up ghost flags older than 10 minutes (crash recovery)
+if os.path.exists(flag_path) and time.time() - os.path.getmtime(flag_path) > 600:
+    try:
+        os.remove(flag_path)
+    except:
+        pass
+
+is_updating_flag = os.path.exists(flag_path)
+
 # Native Streamlit Button for Manual Refresh (bypasses iframe sandbox)
 st.markdown("""
 <style>
@@ -56,8 +69,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-FORCE_REFRESH = st.button("🔄 最新ニュース取得")
-
+FORCE_REFRESH = st.button("🔄 最新ニュース取得", disabled=is_updating_flag)
 if 'articles' not in st.session_state:
     st.session_state.articles = []
     
@@ -72,39 +84,43 @@ if os.path.exists(json_path):
     if file_age > 21600:
         is_expired = True
 
-if not os.path.exists(json_path) or is_expired or FORCE_REFRESH:
-    # Aggressive Cache Busting for Streamlit Cloud
+if (FORCE_REFRESH or is_expired or not os.path.exists(json_path)) and not is_updating_flag:
+    open(flag_path, 'w').close()
+    is_updating_flag = True
+    
+    def background_update():
+        try:
+            from generate_curation import run_curation
+            run_curation()
+        except Exception as e:
+            print(f"Background Update Error: {e}")
+        finally:
+            if os.path.exists(flag_path):
+                try:
+                    os.remove(flag_path)
+                except:
+                    pass
+
+    t = threading.Thread(target=background_update, daemon=True)
+    t.start()
+    
+# Check if we just finished updating to trigger the success toast
+if not is_updating_flag and st.session_state.get('was_updating_flag', False):
+    just_updated_flag = True
     st.cache_data.clear()
     if 'articles' in st.session_state:
         del st.session_state.articles
+else:
+    just_updated_flag = False
 
-    loading_msg = "最新のグローバルニュースをAIが厳選・翻訳しています..."
-    st.markdown(f"""
-        <div style="height: 100vh; display: flex; flex-direction: column; justify-content: center; align-items: center; background: #0d1117; color: white; font-family: sans-serif; position: fixed; top: 0; left: 0; width: 100vw; z-index: 999;">
-            <div style="width: 48px; height: 48px; border: 4px solid rgba(255,255,255,0.05); border-left-color: #58a6ff; border-radius: 50%; animation: spin 1s cubic-bezier(0.5, 0, 0.5, 1) infinite; margin-bottom: 24px;"></div>
-            <style>@keyframes spin {{ 0% {{ transform: rotate(0deg); }} 100% {{ transform: rotate(360deg); }} }}</style>
-            <h3 style="font-weight:600; margin-bottom: 12px; font-size: 1.3rem;">Curating the Web...</h3>
-            <p style="color: #8b949e; font-size: 0.95rem; margin-bottom: 24px; text-align: center; max-width: 80%;">{loading_msg}<br><span style="font-size: 0.8rem; opacity: 0.7;">（約1〜2分かかります）</span></p>
-        </div>
-    """, unsafe_allow_html=True)
-    
-    # Run the heavy generation live just this once
-    try:
-        from generate_curation import run_curation
-        run_curation()
-        # After success, we force a rerun so it loads perfectly via the standard JSON path
-        st.rerun()
-    except Exception as e:
-        st.error(f"Failed to generate curation: {e}")
-        st.stop()
+st.session_state['was_updating_flag'] = is_updating_flag
 
 # Load the JSON normally (0.1s Zero-Load state)
 try:
     with open(json_path, 'r', encoding='utf-8') as f:
         st.session_state.articles = json.load(f)
-except Exception as e:
-    st.error(f"データの読み込みに失敗しました: {e}")
-    st.stop()
+except Exception:
+    st.session_state.articles = []
 
 # ---------------------------------------------------------
 # UI Overhaul Hack:
@@ -256,8 +272,11 @@ html_template = f"""
     </button>
 
     <script>
-        // Load data from python backend
+        // 1. Data Initialization
         const articles = {articles_json};
+        
+        const isUpdating = {'true' if is_updating_flag else 'false'};
+        const justUpdated = {'true' if just_updated_flag else 'false'};
         
         // Load bookmarks and read status from local storage
         let savedIds = JSON.parse(localStorage.getItem('mySavedNewsIds')) || [];
@@ -566,7 +585,11 @@ html_template = f"""
                             <a href="${{a.url}}" target="_blank" onclick="markAsRead('${{a.id}}')" class="block outline-none tap-highlight-transparent group hover:opacity-90 transition mt-3">
                                 <!-- Title and Tags -->
                                 <h2 class="text-[1.15rem] font-bold text-[#e6edf3] mb-2.5 leading-snug tracking-tight group-hover:text-blue-400 transition-colors">${{a.title_ja}}${{blueDot}}</h2>
-                                <div class="flex flex-wrap mb-2">
+                                <!-- Toast Notification Container -->
+        <div id="toastContainer" class="fixed bottom-24 left-1/2 transform -translate-x-1/2 z-[9999999] pointer-events-none flex flex-col items-center justify-end w-full max-w-[90%] transition-all duration-700 opacity-0 translate-y-10">
+        </div>
+
+        <div id="feedContainer" class="flex flex-col gap-3 pb-32"></div>
                                     ${{tagsHtml}}
                                 </div>
                                 
@@ -596,6 +619,42 @@ html_template = f"""
         
         // Initial Mount
         renderFeed();
+        
+        // --- Toast Notification System --- //
+        function showToast(htmlContent, persistent = false) {{
+            const container = document.getElementById('toastContainer');
+            container.innerHTML = `
+                <div class="bg-[#1f242c]/95 backdrop-blur-md text-white border border-gray-700/50 shadow-2xl rounded-full px-5 py-2.5 text-sm font-medium flex items-center shadow-blue-900/10">
+                    ${{htmlContent}}
+                </div>
+            `;
+            
+            // Animate in
+            requestAnimationFrame(() => {{
+                container.classList.remove('opacity-0', 'translate-y-10');
+                container.classList.add('opacity-100', 'translate-y-0');
+            }});
+            
+            if (!persistent) {{
+                setTimeout(() => {{
+                    container.classList.remove('opacity-100', 'translate-y-0');
+                    container.classList.add('opacity-0', 'translate-y-10');
+                }}, 4000);
+            }}
+        }}
+
+        // Trigger on load based on Python flags
+        if (justUpdated) {{
+            showToast("✨ 新しいニュースが届きました。最新のフィードです。");
+        }} else if (isUpdating) {{
+            showToast(`
+                <svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-blue-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <span class="text-[#c9d1d9] tracking-tight">最新ニュースをキュレーション中... <span class="text-gray-500 text-xs ml-1 whitespace-nowrap">(操作可能です)</span></span>
+            `, true);
+        }}
     </script>
 </body>
 </html>
@@ -604,3 +663,14 @@ html_template = f"""
 # Render the massive custom component block
 # Streamlit acts merely as a data pipeline, bypassing standard UI completely
 components.html(html_template, height=800)
+
+# --- Seamless Background Update Poller ---
+if is_updating_flag:
+    # Hang the python script execution while the background thread does its job.
+    # Because Streamlit streams HTML down to the browser before reaching here,
+    # the frontend renders perfectly and remains fully interactive!
+    while os.path.exists(flag_path):
+        time.sleep(1)
+    
+    # Once the file is deleted (thread finished), auto-rerun to naturally push new data.
+    st.rerun()
