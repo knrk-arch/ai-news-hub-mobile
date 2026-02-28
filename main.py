@@ -36,6 +36,11 @@ if os.path.exists(json_path):
         is_expired = True
 
 if not os.path.exists(json_path) or is_expired or FORCE_REFRESH:
+    # Aggressive Cache Busting for Streamlit Cloud
+    st.cache_data.clear()
+    if 'articles' in st.session_state:
+        del st.session_state.articles
+
     loading_msg = "最新のグローバルニュースをAIが厳選・翻訳しています..."
     st.markdown(f"""
         <div style="height: 100vh; display: flex; flex-direction: column; justify-content: center; align-items: center; background: #0d1117; color: white; font-family: sans-serif; position: fixed; top: 0; left: 0; width: 100vw; z-index: 999;">
