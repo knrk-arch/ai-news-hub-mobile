@@ -16,10 +16,47 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# Listen for manual refresh triggers from the frontend
-FORCE_REFRESH = st.query_params.get("refresh") == "true"
-if FORCE_REFRESH:
-    st.query_params.clear()
+# Native Streamlit Button for Manual Refresh (bypasses iframe sandbox)
+st.markdown("""
+<style>
+    /* Floating Update Button (Bottom Left) */
+    div[data-testid="stButton"] {
+        position: fixed;
+        bottom: 24px;
+        left: 24px;
+        z-index: 1000000 !important;
+        width: max-content !important;
+    }
+    div[data-testid="stButton"] button {
+        background-color: rgba(30, 41, 59, 0.85) !important;
+        backdrop-filter: blur(8px) !important;
+        -webkit-backdrop-filter: blur(8px) !important;
+        border: 1px solid rgba(88, 166, 255, 0.3) !important;
+        border-radius: 9999px !important;
+        padding: 8px 20px !important;
+        color: #58a6ff !important;
+        box-shadow: 0 8px 16px rgba(0, 0, 0, 0.5) !important;
+        transition: all 0.2s !important;
+        width: max-content !important;
+        min-width: 0 !important;
+    }
+    div[data-testid="stButton"] button:hover {
+        background-color: rgba(51, 65, 85, 0.95) !important;
+        border-color: rgba(88, 166, 255, 0.6) !important;
+        color: white !important;
+        box-shadow: 0 10px 20px rgba(88, 166, 255, 0.2) !important;
+    }
+    div[data-testid="stButton"] button:active {
+        transform: scale(0.95) !important;
+    }
+    div[data-testid="stButton"] p {
+        font-weight: 600 !important;
+        font-size: 0.85rem !important;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+FORCE_REFRESH = st.button("🔄 最新ニュース取得")
 
 if 'articles' not in st.session_state:
     st.session_state.articles = []
@@ -171,10 +208,7 @@ html_template = f"""
         <div class="flex items-center justify-between gap-3 pt-1">
             <div class="flex items-center gap-2">
                 <h1 class="text-xl font-bold text-white whitespace-nowrap tracking-tight">AINews Hub</h1>
-                <!-- Manual Update Button via Top-Level Navigation -->
-                <a href="?refresh=true" target="_top" class="p-1.5 rounded-full bg-white/5 hover:bg-white/15 active:scale-90 text-gray-400 hover:text-white transition-all border border-gray-700/50 block" title="手動で最新ニュースを取得">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
-                </a>
+                <!-- Manual Update Button is now a native Streamlit FAB -->
             </div>
             <div class="relative w-full max-w-[220px]">
                 <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
