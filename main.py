@@ -166,10 +166,10 @@ html_template = f"""
         <div class="flex items-center justify-between gap-3 pt-1">
             <div class="flex items-center gap-2">
                 <h1 class="text-xl font-bold text-white whitespace-nowrap tracking-tight">AINews Hub</h1>
-                <!-- Manual Update Button via Query Param -->
-                <button onclick="window.location.search = '?refresh=true';" class="p-1.5 rounded-full bg-white/5 hover:bg-white/15 active:scale-90 text-gray-400 hover:text-white transition-all border border-gray-700/50" title="手動で最新ニュースを取得">
+                <!-- Manual Update Button via Top-Level Navigation -->
+                <a href="?refresh=true" target="_top" class="p-1.5 rounded-full bg-white/5 hover:bg-white/15 active:scale-90 text-gray-400 hover:text-white transition-all border border-gray-700/50 block" title="手動で最新ニュースを取得">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
-                </button>
+                </a>
             </div>
             <div class="relative w-full max-w-[220px]">
                 <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -207,19 +207,27 @@ html_template = f"""
     </main>
 
     <!-- Floating Action Button for Scroll to Top -->
-    <button id="scrollTopBtn" onclick="scrollToTop()" class="fixed bottom-6 right-6 w-12 h-12 bg-[#58a6ff] hover:bg-blue-500 text-white rounded-full shadow-xl shadow-blue-900/30 flex items-center justify-center transform transition-all duration-300 translate-y-20 opacity-0 z-50">
+    <button id="scrollTopBtn" onclick="scrollToTop()" class="fixed bottom-6 right-6 w-12 h-12 bg-[#58a6ff] hover:bg-blue-500 text-white rounded-full shadow-xl shadow-blue-900/30 flex items-center justify-center transform transition-all duration-300 translate-y-24 opacity-0 z-50">
         <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 15l7-7 7 7"></path></svg>
+    </button>
+    
+    <!-- AI Radio Button -->
+    <button id="aiRadioBtn" onclick="toggleAudio()" class="fixed bottom-20 right-6 w-12 h-12 bg-purple-600 hover:bg-purple-500 text-white rounded-full shadow-xl shadow-purple-900/30 flex items-center justify-center transform transition-all duration-300 z-50 group border border-purple-400/30">
+        <svg class="w-5 h-5 ml-1" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd"></path></svg>
     </button>
 
     <script>
         // Load data from python backend
         const articles = {articles_json};
         
-        // Load bookmarks from local storage
+        // Load bookmarks and read status from local storage
         let savedIds = JSON.parse(localStorage.getItem('mySavedNewsIds')) || [];
+        let readIds = JSON.parse(localStorage.getItem('myReadNewsIds')) || [];
         
         let currentTab = 'all';
         let searchQuery = '';
+        let currentVisibleArticles = [];
+        let isPlaying = false;
         
         // DOM Elements
         const feedContainer = document.getElementById('feedContainer');
@@ -342,6 +350,59 @@ html_template = f"""
             scrollArea.scrollTo({{ top: 0, behavior: 'smooth' }});
         }}
         
+        // 6. Read State Tracking
+        function markAsRead(id) {{
+            if (!readIds.includes(id)) {{
+                readIds.push(id);
+                localStorage.setItem('myReadNewsIds', JSON.stringify(readIds));
+                
+                // Optimistic visual update
+                const card = document.getElementById(`card-${{id}}`);
+                const dot = document.getElementById(`dot-${{id}}`);
+                if(card) card.classList.add('opacity-50', 'grayscale-[30%]');
+                if(dot) dot.style.display = 'none';
+            }}
+        }}
+
+        // 7. AI Radio Functionality
+        function toggleAudio() {{
+            const btn = document.getElementById('aiRadioBtn');
+            if (isPlaying) {{
+                window.speechSynthesis.cancel();
+                isPlaying = false;
+                btn.innerHTML = `<svg class="w-5 h-5 ml-1" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd"></path></svg>`;
+                btn.classList.replace('bg-red-500', 'bg-purple-600');
+                btn.classList.replace('shadow-red-900/40', 'shadow-purple-900/30');
+                return;
+            }}
+            
+            if (currentVisibleArticles.length === 0) return;
+            
+            isPlaying = true;
+            btn.innerHTML = `<svg class="w-5 h-5 animate-pulse" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM7 8a1 1 0 012 0v4a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v4a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd"></path></svg>`;
+            btn.classList.replace('bg-purple-600', 'bg-red-500');
+            btn.classList.replace('shadow-purple-900/30', 'shadow-red-900/40');
+            
+            let fullText = "AIアナウンサーです。現在画面に表示されているニュースをお読みします。";
+            currentVisibleArticles.slice(0, 10).forEach(a => {{
+                fullText += `次のニュースです。${{a.title_ja}}。${{a.core_sentence}}。`;
+            }});
+            fullText += "ニュースは以上です。";
+            
+            const utterance = new window.SpeechSynthesisUtterance(fullText);
+            utterance.lang = 'ja-JP';
+            utterance.rate = 1.05;
+            
+            utterance.onend = () => {{
+                isPlaying = false;
+                btn.innerHTML = `<svg class="w-5 h-5 ml-1" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd"></path></svg>`;
+                btn.classList.replace('bg-red-500', 'bg-purple-600');
+                btn.classList.replace('shadow-red-900/40', 'shadow-purple-900/30');
+            }};
+            
+            window.speechSynthesis.speak(utterance);
+        }}
+        
         // Utility logic
         function getAccentColor(source) {{
             const src = source.toLowerCase();
@@ -375,6 +436,8 @@ html_template = f"""
                 return true; // 'all'
             }});
             
+            currentVisibleArticles = filtered;
+            
             // Empty State Handling
             if (filtered.length === 0) {{
                 feedContainer.innerHTML = `
@@ -394,7 +457,11 @@ html_template = f"""
             // Build the DOM string efficiently
             const html = filtered.map(a => {{
                 const isSaved = savedIds.includes(a.id);
+                const isRead = readIds.includes(a.id);
                 const accentColor = getAccentColor(a.category);
+                
+                const opacityClass = isRead ? 'opacity-50 grayscale-[30%] transition-all' : '';
+                const blueDot = isRead ? '' : `<span id="dot-${{a.id}}" class="inline-block w-2.5 h-2.5 bg-blue-500 rounded-full shadow-[0_0_8px_rgba(59,130,246,0.8)] ml-2 mb-0.5 animate-pulse"></span>`;
                 
                 // Beautiful Pill Tags
                 const tagsHtml = (a.tags || []).map(t => 
@@ -404,8 +471,13 @@ html_template = f"""
                 // Core 1-Sentence Summary format
                 const summaryHtml = `<p class="text-[0.95rem] font-medium text-gray-300 leading-relaxed mt-3 mb-1 pl-3 border-l-2 border-[#58a6ff]/70">${{a.core_sentence || ''}}</p>`;
                 
+                // Beautiful Insight Display
+                const insightHtml = a.insight 
+                    ? `<p class="text-[0.85rem] font-semibold text-amber-200/90 mt-3 pt-2 border-t border-gray-700/50">${{a.insight}}</p>` 
+                    : '';
+                
                 return `
-                    <div class="relative bg-[#161b22] border border-gray-700/60 rounded-2xl overflow-hidden card-anim shadow-sm">
+                    <div id="card-${{a.id}}" class="relative bg-[#161b22] border border-gray-700/60 rounded-2xl overflow-hidden card-anim shadow-sm ${{opacityClass}}">
                         <div class="absolute top-0 left-0 right-0 h-1" style="background-color: ${{accentColor}}"></div>
                         
                         <div class="p-4 pb-0">
@@ -422,15 +494,16 @@ html_template = f"""
                                 </button>
                             </div>
                             
-                            <a href="${{a.url}}" target="_blank" class="block outline-none tap-highlight-transparent group hover:opacity-90 transition mt-3">
+                            <a href="${{a.url}}" target="_blank" onclick="markAsRead('${{a.id}}')" class="block outline-none tap-highlight-transparent group hover:opacity-90 transition mt-3">
                                 <!-- Title and Tags -->
-                                <h2 class="text-[1.15rem] font-bold text-[#e6edf3] mb-2.5 leading-snug tracking-tight group-hover:text-blue-400 transition-colors">${{a.title_ja}}</h2>
+                                <h2 class="text-[1.15rem] font-bold text-[#e6edf3] mb-2.5 leading-snug tracking-tight group-hover:text-blue-400 transition-colors">${{a.title_ja}}${{blueDot}}</h2>
                                 <div class="flex flex-wrap mb-2">
                                     ${{tagsHtml}}
                                 </div>
                                 
-                                <!-- Core 1-sentence summary -->
+                                <!-- Core 1-sentence summary & Insight -->
                                 ${{summaryHtml}}
+                                ${{insightHtml}}
                             </a>
                         </div>
                         
@@ -440,7 +513,7 @@ html_template = f"""
                                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
                                 読むのに約${{a.read_time_min || 1}}分
                             </span>
-                            <a href="${{a.url}}" target="_blank" class="text-blue-400 text-[0.75rem] font-bold tracking-wide flex items-center gap-1.5 bg-[#58a6ff]/10 border border-[#58a6ff]/20 px-3.5 py-1.5 rounded-full hover:bg-[#58a6ff]/20 active:scale-95 transition">
+                            <a href="${{a.url}}" target="_blank" onclick="markAsRead('${{a.id}}')" class="text-blue-400 text-[0.75rem] font-bold tracking-wide flex items-center gap-1.5 bg-[#58a6ff]/10 border border-[#58a6ff]/20 px-3.5 py-1.5 rounded-full hover:bg-[#58a6ff]/20 active:scale-95 transition">
                                 記事を読む
                                 <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
                             </a>

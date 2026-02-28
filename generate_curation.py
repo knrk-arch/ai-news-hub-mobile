@@ -181,11 +181,25 @@ def process_article(entry, source_name, cat):
     if len(core_sentence) > 120:
         core_sentence = core_sentence[:118] + "..."
 
+    # Create pseudo-insight using lightweight logic based on tags and category
+    import random
+    tag1 = tags[0][:8] if tags else cat.split('・')[0] # Limit tag length to fit insight smoothly
+    templates = {
+        "AI・テクノロジートレンド": [f"{tag1}の活用がさらに拡大", f"{tag1}による業務の高速化", f"次世代{tag1}への移行加速"],
+        "ガジェット・ハードウェア": [f"{tag1}による生活の質向上", f"新しい{tag1}体験が普及", f"{tag1}のエコシステム強化"],
+        "ビジネス・経済": [f"{tag1}市場の競争が激化", f"{tag1}関連の投資が加速", f"{tag1}が業界標準を変える"],
+        "ライフハック・仕事術": [f"{tag1}の仕組み化で時短", f"{tag1}の活用で生産性UP", f"新しい{tag1}習慣の定着"],
+        "サイエンス・未来予測": [f"{tag1}のブレイクスルー", f"{tag1}の新常識が到来", f"{tag1}の可能性が拡大"]
+    }
+    insight_text = random.choice(templates.get(cat, [f"{tag1}の新たな可能性が開拓"]))
+    insight = f"💡 影響: {insight_text}"
+
     return {
         "id": uid,
         "category": cat,
         "title_ja": title_ja,
         "tags": tags,
+        "insight": insight,
         "core_sentence": core_sentence,
         "source": source_name,
         "read_time_min": read_time,
