@@ -621,11 +621,7 @@ html_template = f"""
                                 <div class="flex items-center gap-2">
                                     <span class="text-[0.65rem] font-bold text-gray-400 bg-white/5 border border-white/5 py-0.5 px-2 rounded uppercase tracking-wider">${{a.source}}</span>
                                 </div>
-                                <div class="flex items-center gap-1.5 z-10 -mr-2 -mt-2">
-                                    <button onclick="muteArticle('${{a.id}}', event)" class="p-2 rounded-full text-gray-500/50 hover:text-red-400 hover:bg-white/10 transition active:scale-90" title="興味なし（関連タグを非表示）">
-                                        <svg class="w-[1.05rem] h-[1.05rem]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"></path></svg>
-                                    </button>
-                                    <button data-id="${{a.id}}" onclick="toggleBookmark('${{a.id}}', event)" class="p-2 rounded-full hover:bg-white/10 transition active:scale-90">
+                                <button data-id="${{a.id}}" onclick="toggleBookmark('${{a.id}}', event)" class="p-2 -mr-2 -mt-2 rounded-full hover:bg-white/10 transition z-10 active:scale-90">
                                     ${{isSaved
                                         ? `<svg class="w-[1.15rem] h-[1.15rem] text-yellow-500 drop-shadow-sm" fill="currentColor" viewBox="0 0 20 20"><path d="M5 4a2 2 0 012-2h6a2 2 0 012 2v14l-5-2.5L5 18V4z"></path></svg>`
                                         : `<svg class="w-[1.15rem] h-[1.15rem] text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"></path></svg>`
@@ -648,14 +644,19 @@ html_template = f"""
                         
                         <!-- Actions -->
                         <div class="px-4 py-3 bg-[#11151c] flex justify-between items-center border-t border-gray-800/80 mt-4">
-                            <span class="text-[0.7rem] text-gray-500 font-medium flex items-center gap-1.5">
-                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                                読むのに約${{a.read_time_min || 1}}分
+                            <span class="text-[0.7rem] text-gray-500 font-medium flex items-center gap-1.5 min-w-0 flex-shrink-0">
+                                <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                                <span class="truncate">約${{a.read_time_min || 1}}分</span>
                             </span>
-                            <a href="${{a.url}}" target="_blank" onclick="markAsRead('${{a.id}}')" class="text-blue-400 text-[0.75rem] font-bold tracking-wide flex items-center gap-1.5 bg-[#58a6ff]/10 border border-[#58a6ff]/20 px-3.5 py-1.5 rounded-full hover:bg-[#58a6ff]/20 active:scale-95 transition">
-                                記事を読む
-                                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
-                            </a>
+                            <div class="flex items-center gap-2.5">
+                                <button onclick="muteArticle('${{a.id}}', event)" class="p-1.5 rounded-full text-gray-500/60 hover:text-red-400 hover:bg-white/5 transition active:scale-90" title="興味なし（関連タグをミュート）">
+                                    <svg class="w-[1.1rem] h-[1.1rem]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                                </button>
+                                <a href="${{a.url}}" target="_blank" onclick="markAsRead('${{a.id}}')" class="text-blue-400 text-[0.75rem] font-bold tracking-wide flex items-center gap-1.5 bg-[#58a6ff]/10 border border-[#58a6ff]/20 px-3.5 py-1.5 rounded-full hover:bg-[#58a6ff]/20 active:scale-95 transition flex-shrink-0">
+                                    <span class="whitespace-nowrap">記事を読む</span>
+                                    <svg class="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
+                                </a>
+                            </div>
                         </div>
                     </div>
                 `;
