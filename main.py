@@ -286,9 +286,10 @@ html_template = f"""
         const isUpdating = {'true' if is_updating_flag else 'false'};
         const justUpdated = {'true' if just_updated_flag else 'false'};
         
-        // Load bookmarks and read status from local storage
+        // Load bookmarks, read status, and muted tags from local storage
         let savedIds = JSON.parse(localStorage.getItem('mySavedNewsIds')) || [];
         let readIds = JSON.parse(localStorage.getItem('myReadNewsIds')) || [];
+        let mutedTags = JSON.parse(localStorage.getItem('myMutedTags')) || [];
         
         let currentTab = 'all';
         let searchQuery = '';
@@ -423,11 +424,46 @@ html_template = f"""
                 readIds.push(id);
                 localStorage.setItem('myReadNewsIds', JSON.stringify(readIds));
                 
+
                 // Optimistic visual update
                 const card = document.getElementById(`card-${{id}}`);
                 const dot = document.getElementById(`dot-${{id}}`);
                 if(card) card.classList.add('opacity-50', 'grayscale-[30%]');
                 if(dot) dot.style.display = 'none';
+            }}
+        }}
+
+        // 6.5 Mute Tag Functionality
+        function muteArticle(id, event) {{
+            event.preventDefault();
+            event.stopPropagation();
+
+            const article = articles.find(a => a.id === id);
+            if (article && article.tags && article.tags.length > 0) {{
+                let newlyMuted = 0;
+                article.tags.forEach(t => {{
+                    if (!mutedTags.includes(t)) {{
+                        mutedTags.push(t);
+                        newlyMuted++;
+                    }}
+                }});
+
+                if (newlyMuted > 0) {{
+                    localStorage.setItem('myMutedTags', JSON.stringify(mutedTags));
+                    showToast(`🚫 類似トピック（${{article.tags[0]}}等）をミュートしました`);
+                }}
+
+                // Immediately hide visually for smooth UX
+                const card = document.getElementById(`card-${{id}}`);
+                if (card) {{
+                    card.style.opacity = '0';
+                    card.style.transform = 'scale(0.95)';
+                    setTimeout(() => {{
+                        renderFeed();
+                    }}, 250);
+                }} else {{
+                    renderFeed();
+                }}
             }}
         }}
 
@@ -440,7 +476,7 @@ html_template = f"""
                 btn.innerHTML = `<svg class="w-5 h-5 ml-1" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd"></path></svg>`;
                 btn.classList.replace('bg-red-500', 'bg-purple-600');
                 btn.classList.replace('shadow-red-900/40', 'shadow-purple-900/30');
-                
+
                 // Release wake lock manually
                 if (wakeLock !== null) {{
                     try {{
@@ -452,14 +488,14 @@ html_template = f"""
                 }}
                 return;
             }}
-            
+
             if (currentVisibleArticles.length === 0) return;
-            
+
             isPlaying = true;
             btn.innerHTML = `<svg class="w-5 h-5 animate-pulse" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM7 8a1 1 0 012 0v4a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v4a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd"></path></svg>`;
             btn.classList.replace('bg-purple-600', 'bg-red-500');
             btn.classList.replace('shadow-purple-900/30', 'shadow-red-900/40');
-            
+
             // Acquire wake lock to prevent screen sleep during audio
             try {{
                 if ('wakeLock' in navigator) {{
@@ -468,23 +504,23 @@ html_template = f"""
             }} catch (err) {{
                 console.warn('Wake Lock request error:', err);
             }}
-            
+
             let fullText = "AIアナウンサーです。現在画面に表示されているニュースをお読みします。";
             currentVisibleArticles.slice(0, 10).forEach(a => {{
                 fullText += `次のニュースです。${{a.title_ja}}。${{a.core_sentence}}。`;
             }});
             fullText += "ニュースは以上です。";
-            
+
             const utterance = new window.SpeechSynthesisUtterance(fullText);
             utterance.lang = 'ja-JP';
             utterance.rate = 1.05;
-            
+
             utterance.onend = async () => {{
                 isPlaying = false;
                 btn.innerHTML = `<svg class="w-5 h-5 ml-1" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd"></path></svg>`;
                 btn.classList.replace('bg-red-500', 'bg-purple-600');
                 btn.classList.replace('shadow-red-900/40', 'shadow-purple-900/30');
-                
+
                 // Release wake lock when finished
                 if (wakeLock !== null) {{
                     try {{
@@ -495,10 +531,10 @@ html_template = f"""
                     }}
                 }}
             }};
-            
+
             window.speechSynthesis.speak(utterance);
         }}
-        
+
         // Utility logic
         function getAccentColor(source) {{
             const src = source.toLowerCase();
@@ -516,24 +552,27 @@ html_template = f"""
             const srcLower = source.toLowerCase();
             return gadgets.some(g => srcLower.includes(g));
         }}
-        
+
         // The Engine Renderer
         function renderFeed() {{
             // Apply all filters completely clientside for instant UX
             let filtered = articles.filter(a => {{
+                // Check if any tag is muted
+                if (a.tags && a.tags.some(t => mutedTags.includes(t))) return false;
+
                 // Search check (using the simplified data structure)
                 const matchString = `${{a.title_ja}} ${{a.source}} ${{a.core_sentence}} ${{a.tags.join(' ')}}`.toLowerCase();
                 if (searchQuery && !matchString.includes(searchQuery)) return false;
-                
+
                 // Tab Context check
                 if (currentTab === 'saved') return savedIds.includes(a.id);
                 if (currentTab !== 'all') return a.category === currentTab;
-                
+
                 return true; // 'all'
             }});
-            
+
             currentVisibleArticles = filtered;
-            
+
             // Empty State Handling
             if (filtered.length === 0) {{
                 feedContainer.innerHTML = `
@@ -545,46 +584,50 @@ html_template = f"""
                 statsBanner.textContent = ``;
                 return;
             }}
-            
-            statsBanner.innerHTML = currentTab === 'saved' 
+
+            statsBanner.innerHTML = currentTab === 'saved'
                 ? `保存済みの記事: <span class="text-white">${{filtered.length}}件</span>`
                 : `<span class="text-white">${{filtered.length}}件</span> の厳選トップニュース`;
-            
+
             // Build the DOM string efficiently
             const html = filtered.map(a => {{
                 const isSaved = savedIds.includes(a.id);
                 const isRead = readIds.includes(a.id);
                 const accentColor = getAccentColor(a.category);
-                
+
                 const opacityClass = isRead ? 'opacity-50 grayscale-[30%] transition-all' : '';
                 const blueDot = isRead ? '' : `<span id="dot-${{a.id}}" class="inline-block w-2.5 h-2.5 bg-blue-500 rounded-full shadow-[0_0_8px_rgba(59,130,246,0.8)] ml-2 mb-0.5 animate-pulse"></span>`;
-                
+
                 // Beautiful Pill Tags
-                const tagsHtml = (a.tags || []).map(t => 
+                const tagsHtml = (a.tags || []).map(t =>
                     `<span class="inline-flex items-center px-2 py-0.5 rounded text-[0.65rem] font-medium bg-[#58a6ff]/10 text-blue-400 border border-blue-500/20 mr-1.5 mb-2">${{t}}</span>`
                 ).join('');
-                
+
                 // Core 1-Sentence Summary format
                 const summaryHtml = `<p class="text-[0.95rem] font-medium text-gray-300 leading-relaxed mt-3 mb-1 pl-3 border-l-2 border-[#58a6ff]/70">${{a.core_sentence || ''}}</p>`;
-                
+
                 // Beautiful Insight Display
-                const insightHtml = a.insight 
-                    ? `<p class="text-[0.85rem] font-semibold text-amber-200/90 mt-3 pt-2 border-t border-gray-700/50">${{a.insight}}</p>` 
+                const insightHtml = a.insight
+                    ? `<p class="text-[0.85rem] font-semibold text-amber-200/90 mt-3 pt-2 border-t border-gray-700/50">${{a.insight}}</p>`
                     : '';
-                
+
                 return `
                     <div id="card-${{a.id}}" class="relative bg-[#161b22] border border-gray-700/60 rounded-2xl overflow-hidden card-anim shadow-sm ${{opacityClass}}">
                         <div class="absolute top-0 left-0 right-0 h-1" style="background-color: ${{accentColor}}"></div>
-                        
+
                         <div class="p-4 pb-0">
                             <!-- Source and Bookmark -->
                             <div class="flex justify-between items-center mb-2.5">
                                 <div class="flex items-center gap-2">
                                     <span class="text-[0.65rem] font-bold text-gray-400 bg-white/5 border border-white/5 py-0.5 px-2 rounded uppercase tracking-wider">${{a.source}}</span>
                                 </div>
-                                <button data-id="${{a.id}}" onclick="toggleBookmark('${{a.id}}', event)" class="p-2 -mr-2 -mt-2 rounded-full hover:bg-white/10 transition z-10 active:scale-90">
-                                    ${{isSaved 
-                                        ? `<svg class="w-[1.15rem] h-[1.15rem] text-yellow-500 drop-shadow-sm" fill="currentColor" viewBox="0 0 20 20"><path d="M5 4a2 2 0 012-2h6a2 2 0 012 2v14l-5-2.5L5 18V4z"></path></svg>` 
+                                <div class="flex items-center gap-1.5 z-10 -mr-2 -mt-2">
+                                    <button onclick="muteArticle('${{a.id}}', event)" class="p-2 rounded-full text-gray-500/50 hover:text-red-400 hover:bg-white/10 transition active:scale-90" title="興味なし（関連タグを非表示）">
+                                        <svg class="w-[1.05rem] h-[1.05rem]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"></path></svg>
+                                    </button>
+                                    <button data-id="${{a.id}}" onclick="toggleBookmark('${{a.id}}', event)" class="p-2 rounded-full hover:bg-white/10 transition active:scale-90">
+                                    ${{isSaved
+                                        ? `<svg class="w-[1.15rem] h-[1.15rem] text-yellow-500 drop-shadow-sm" fill="currentColor" viewBox="0 0 20 20"><path d="M5 4a2 2 0 012-2h6a2 2 0 012 2v14l-5-2.5L5 18V4z"></path></svg>`
                                         : `<svg class="w-[1.15rem] h-[1.15rem] text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"></path></svg>`
                                     }}
                                 </button>
