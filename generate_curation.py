@@ -110,7 +110,7 @@ def extract_tags(text, num_tags=3):
 
 def process_article(entry, source_name, cat):
     title = entry.get('title', 'No Title')
-    link = entry.url if "url" in entry else entry.get('link', '')
+    link = entry.get('link') or entry.get('url') or getattr(entry, 'link', '')
     
     published = entry.get('published', entry.get('pubDate', entry.get('updated', entry.get('dc:date', entry.get('date', '')))))
     pub_date = parse_date(published)
