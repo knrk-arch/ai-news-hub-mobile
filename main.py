@@ -590,6 +590,8 @@ html_template = f"""
                                 <!-- Title and Tags -->
                                 <h2 class="text-[1.15rem] font-bold text-[#e6edf3] mb-2.5 leading-snug tracking-tight group-hover:text-blue-400 transition-colors">${{a.title_ja}}${{blueDot}}</h2>
                                 <div class="flex flex-wrap mb-2">
+                                    ${{tagsHtml}}
+                                </div>
                                 
                                 <!-- Core 1-sentence summary & Insight -->
                                 ${{summaryHtml}}
