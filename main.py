@@ -163,6 +163,52 @@ st.markdown("""
 # Need to replace some html characters to safely put in script tag
 articles_json = json.dumps(st.session_state.articles).replace("</", "<\\/")
 
+# Fetch Bluesky SNS Trends server-side to avoid CORS blocks & Auth blocks
+@st.cache_data(ttl=300) # Cache for 5 minutes
+def fetch_bluesky_sns_trends():
+    import urllib.request
+    import urllib.parse
+    
+    # searchPosts API requires auth. We use getFeed on a known Japanese News Custom Feed as a public unauthenticated workaround.
+    # "ニュース（日本語）" Feed DID
+    feed_uri = urllib.parse.quote("at://did:plc:ssebkmhtxgk33r67ggkfl7xr/app.bsky.feed.generator/aaaajtub7bar2")
+    # Fetch 100 recent posts from the news feed to ensure we find enough AI related posts
+    url = f"https://public.api.bsky.app/xrpc/app.bsky.feed.getFeed?feed={feed_uri}&limit=100"
+    
+    keywords = ["AI", "ChatGPT", "LLM", "OpenAI", "生成AI", "人工知能"]
+    ai_posts = []
+    
+    try:
+        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req) as response:
+            content = response.read().decode()
+            data = json.loads(content)
+            feed_items = data.get('feed', [])
+            
+            # Extract actual posts and filter by AI keywords
+            for item in feed_items:
+                post = item.get('post', {})
+                record = post.get('record', {})
+                text = record.get('text', '')
+                
+                # Simple keyword matching
+                if any(k.lower() in text.lower() for k in keywords):
+                    ai_posts.append(post)
+                    
+            # Fallback if too few filtered results: just return the latest news
+            if len(ai_posts) < 3:
+                # If we couldn't find enough AI specific news, just return general tech/news trends to avoid empty state
+                return [item.get('post') for item in feed_items[:25]]
+                
+            return ai_posts[:25]
+            
+    except Exception as e:
+        print("Bluesky backend fetch error:", e)
+        return []
+
+bluesky_posts_list = fetch_bluesky_sns_trends()
+bluesky_posts_json = json.dumps(bluesky_posts_list).replace("</", "<\\/")
+
 # ==========================================
 # The Embedded Frontend App (Tailwind CSS + Vanilla JS)
 # ==========================================
@@ -249,6 +295,7 @@ html_template = f"""
             <button onclick="changeTab('ビジネス・経済')" class="tab-btn px-4 py-1.5 rounded-full text-[0.85rem] font-medium whitespace-nowrap bg-white/5 text-gray-400 border border-transparent transition-colors shadow-sm" data-tab="ビジネス・経済">ビジネス・経済</button>
             <button onclick="changeTab('ライフハック・仕事術')" class="tab-btn px-4 py-1.5 rounded-full text-[0.85rem] font-medium whitespace-nowrap bg-white/5 text-gray-400 border border-transparent transition-colors shadow-sm" data-tab="ライフハック・仕事術">ライフハック</button>
             <button onclick="changeTab('サイエンス・未来予測')" class="tab-btn px-4 py-1.5 rounded-full text-[0.85rem] font-medium whitespace-nowrap bg-white/5 text-gray-400 border border-transparent transition-colors shadow-sm" data-tab="サイエンス・未来予測">サイエンス</button>
+            <button onclick="changeTab('sns')" class="tab-btn px-4 py-1.5 rounded-full text-[0.85rem] font-medium whitespace-nowrap bg-white/5 text-gray-400 border border-transparent transition-colors shadow-sm" data-tab="sns">SNSトレンド</button>
             <button onclick="changeTab('saved')" class="tab-btn px-4 py-1.5 rounded-full text-[0.85rem] font-medium whitespace-nowrap bg-white/5 text-gray-400 border border-transparent transition-colors shadow-sm flex items-center gap-1.5" data-tab="saved">
                 <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path d="M5 4a2 2 0 012-2h6a2 2 0 012 2v14l-5-2.5L5 18V4z"></path></svg>
                 保存済み
@@ -290,6 +337,11 @@ html_template = f"""
         let savedIds = JSON.parse(localStorage.getItem('mySavedNewsIds')) || [];
         let readIds = JSON.parse(localStorage.getItem('myReadNewsIds')) || [];
         let mutedTags = JSON.parse(localStorage.getItem('myMutedTags')) || [];
+        
+        // SNS State
+        let bskyPosts = {bluesky_posts_json};
+        let isFetchingBskey = false;
+
         
         let currentTab = 'all';
         let searchQuery = '';
@@ -338,13 +390,19 @@ html_template = f"""
             
             // Bring user back to top perfectly smoothly
             scrollArea.scrollTo(0, 0);
-            renderFeed();
+            
+            if (tab === 'sns') {{
+                // Data is already loaded via Python backend
+                renderFeed();
+            }} else {{
+                renderFeed();
+            }}
         }}
-        
+
         // 4. Swipe Gesture for Tab Navigation
         let touchStartX = 0;
         let touchStartY = 0;
-        const tabOrder = ['all', 'AI・テクノロジートレンド', 'ガジェット・ハードウェア', 'ビジネス・経済', 'ライフハック・仕事術', 'サイエンス・未来予測', 'saved'];
+        const tabOrder = ['all', 'AI・テクノロジートレンド', 'ガジェット・ハードウェア', 'ビジネス・経済', 'ライフハック・仕事術', 'サイエンス・未来予測', 'sns', 'saved'];
 
         scrollArea.addEventListener('touchstart', e => {{
             touchStartX = e.changedTouches[0].screenX;
@@ -553,8 +611,103 @@ html_template = f"""
             return gadgets.some(g => srcLower.includes(g));
         }}
 
+        function renderSnsFeed() {{
+            if (!bskyPosts || bskyPosts.length === 0) {{
+                feedContainer.innerHTML = `
+                    <div class="flex flex-col items-center justify-center py-24 text-gray-500">
+                        <svg class="w-16 h-16 mb-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                        <p class="text-[0.9rem]">投稿がまだありません（またはエラー）</p>
+                    </div>
+                `;
+                statsBanner.textContent = '';
+                return;
+            }}
+            
+            // Mute Filter Integration
+            let filteredPosts = bskyPosts.filter(post => {{
+                const text = post.record?.text || '';
+                // If the post text contains any of the muted tags, filter it out
+                if (mutedTags.some(tag => text.includes(tag))) return false;
+                
+                // Also apply search query if active
+                if (searchQuery && !text.toLowerCase().includes(searchQuery)) return false;
+                
+                return true;
+            }});
+            
+            if (filteredPosts.length === 0) {{
+                feedContainer.innerHTML = '<div class="flex items-center justify-center py-20 text-gray-500">ミュートや検索条件により非表示になりました</div>';
+                statsBanner.textContent = '';
+                return;
+            }}
+            
+            statsBanner.innerHTML = `<span class="text-blue-400">Bluesky トレンド</span>: <span class="text-white">\${{filteredPosts.length}}件</span> <span class="text-xs ml-1 text-gray-500">(ミュート連携済)</span>`;
+
+            // Render highly compact UI for SNS posts
+            const html = filteredPosts.map(post => {{
+                const author = post.author || {{}};
+                const handle = author.handle || 'unknown';
+                const displayName = author.displayName || handle;
+                const avatar = author.avatar || 'https://abs.twimg.com/sticky/default_profile_images/default_profile_400x400.png';
+                const text = post.record?.text || '';
+                const dateRaw = new Date(post.record?.createdAt || Date.now());
+                const dateStr = dateRaw.toLocaleString('ja-JP', {{ month: 'short', day: 'numeric', hour: '2-digit', minute:'2-digit' }});
+                
+                // Create a link to the actual post
+                let postUrl = '#';
+                if (post.uri && post.uri.includes('app.bsky.feed.post')) {{
+                    const rkey = post.uri.split('/').pop();
+                    postUrl = `https://bsky.app/profile/${{handle}}/post/${{rkey}}`;
+                }}
+                
+                // Escape problematic characters for innerHTML insertion
+                const safeText = text.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+                
+                return `
+                    <a href="${{postUrl}}" target="_blank" class="block outline-none tap-highlight-transparent group bg-[#161b22] border border-gray-700/60 rounded-xl p-3 shadow-sm hover:border-gray-500/50 transition-colors card-anim relative overflow-hidden">
+                        <!-- Bluesky accent indicator -->
+                        <div class="absolute top-0 left-0 bottom-0 w-1 bg-blue-500/70"></div>
+                        <div class="flex gap-3 ml-1">
+                            <img src="${{avatar}}" onerror="this.src='https://abs.twimg.com/sticky/default_profile_images/default_profile_400x400.png'" class="w-10 h-10 rounded-full object-cover flex-shrink-0 border border-gray-600/30">
+                            <div class="flex-1 min-w-0">
+                                <div class="flex items-center gap-1.5 mb-1.5">
+                                    <span class="font-bold text-[0.9rem] text-[#e6edf3] truncate group-hover:text-blue-400 transition-colors">${{displayName}}</span>
+                                    <span class="text-[0.75rem] text-gray-500 truncate">@${{handle}}</span>
+                                    <span class="text-gray-600 text-[0.7rem] ml-auto flex-shrink-0">${{dateStr}}</span>
+                                </div>
+                                <p class="text-[0.85rem] text-gray-300 leading-relaxed whitespace-pre-wrap break-words">${{safeText}}</p>
+                                
+                                <!-- Interaction icons (read-only mockup) -->
+                                <div class="flex items-center gap-5 mt-3 pt-2 border-t border-gray-700/40 text-gray-500">
+                                    <div class="flex items-center gap-1.5 group/icon hover:text-green-400 transition-colors">
+                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path></svg>
+                                        <span class="text-[0.7rem]">${{post.replyCount || 0}}</span>
+                                    </div>
+                                    <div class="flex items-center gap-1.5 group/icon hover:text-blue-400 transition-colors">
+                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"></path></svg>
+                                        <span class="text-[0.7rem]">${{post.repostCount || 0}}</span>
+                                    </div>
+                                    <div class="flex items-center gap-1.5 group/icon hover:text-red-400 transition-colors">
+                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"></path></svg>
+                                        <span class="text-[0.7rem]">${{post.likeCount || 0}}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </a>
+                `;
+            }}).join('');
+            
+            feedContainer.innerHTML = html;
+        }}
+
         // The Engine Renderer
         function renderFeed() {{
+            if (currentTab === 'sns') {{
+                renderSnsFeed();
+                return;
+            }}
+
             // Apply all filters completely clientside for instant UX
             let filtered = articles.filter(a => {{
                 // Check if any tag is muted
