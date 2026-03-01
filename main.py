@@ -20,6 +20,9 @@ import threading
 
 flag_path = os.path.join("data", "is_updating.flag")
 
+# Ensure data directory exists (Streamlit Cloud fresh boots might miss it)
+os.makedirs("data", exist_ok=True)
+
 # Clean up ghost flags older than 10 minutes (crash recovery)
 if os.path.exists(flag_path) and time.time() - os.path.getmtime(flag_path) > 600:
     try:
@@ -85,6 +88,7 @@ if os.path.exists(json_path):
         is_expired = True
 
 if (FORCE_REFRESH or is_expired or not os.path.exists(json_path)) and not is_updating_flag:
+    os.makedirs(os.path.dirname(flag_path), exist_ok=True)
     open(flag_path, 'w').close()
     is_updating_flag = True
     
