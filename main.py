@@ -254,6 +254,10 @@ html_template = f"""
         <div id="statsBanner" class="text-xs text-gray-400 text-center font-medium mt-1">表示中: 0件</div>
     </header>
 
+    <!-- Toast Notification Container (Fixed position at bottom, above content) -->
+    <div id="toastContainer" class="fixed bottom-24 left-1/2 transform -translate-x-1/2 z-[9999999] pointer-events-none flex flex-col items-center justify-end w-full max-w-[90%] transition-all duration-700 opacity-0 translate-y-10">
+    </div>
+
     <!-- Main Content Area where infinite scroll happens natively -->
     <main class="flex-1 overflow-y-auto w-full" id="scrollArea">
         <div class="px-4 py-4 pb-24 flex flex-col gap-4" id="feedContainer">
@@ -585,13 +589,7 @@ html_template = f"""
                             <a href="${{a.url}}" target="_blank" onclick="markAsRead('${{a.id}}')" class="block outline-none tap-highlight-transparent group hover:opacity-90 transition mt-3">
                                 <!-- Title and Tags -->
                                 <h2 class="text-[1.15rem] font-bold text-[#e6edf3] mb-2.5 leading-snug tracking-tight group-hover:text-blue-400 transition-colors">${{a.title_ja}}${{blueDot}}</h2>
-                                <!-- Toast Notification Container -->
-        <div id="toastContainer" class="fixed bottom-24 left-1/2 transform -translate-x-1/2 z-[9999999] pointer-events-none flex flex-col items-center justify-end w-full max-w-[90%] transition-all duration-700 opacity-0 translate-y-10">
-        </div>
-
-        <div id="feedContainer" class="flex flex-col gap-3 pb-32"></div>
-                                    ${{tagsHtml}}
-                                </div>
+                                <div class="flex flex-wrap mb-2">
                                 
                                 <!-- Core 1-sentence summary & Insight -->
                                 ${{summaryHtml}}
